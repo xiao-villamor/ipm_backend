@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const url = "http://ipm.hermo.me/api/rest"
+const url = "http://localhost:8080/api/rest"
 
 type access struct {
 	Facility    string `json:"facility"`
@@ -33,7 +33,7 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	jsonValue,_ := json.Marshal(values)
 	//fmt.Fprintf(rw,string(jsonValue))
 
-	req, err := http.NewRequest("GET","http://ipm.hermo.me/api/rest/user_access_log/" + uuid + "/daterange?limit=20", bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequest("GET",url + "/user_access_log/" + uuid + "/daterange?limit=20", bytes.NewBuffer(jsonValue))
 	req.Header.Set("x-hasura-admin-secret","myadminsecretkey")
 
 	client := &http.Client{}
@@ -86,7 +86,7 @@ func login(rw http.ResponseWriter, r *http.Request){
 	log.Println(pwd)
 
 
-	req, err := http.NewRequest("POST","http://ipm.hermo.me/api/rest/login?username=" + login + "&password="+ pwd, nil)
+	req, err := http.NewRequest("POST",url + "/login?username=" + login + "&password="+ pwd, nil)
 	req.Header.Set("x-hasura-admin-secret","myadminsecretkey")
 
 	client := &http.Client{}
@@ -121,7 +121,7 @@ func register(rw http.ResponseWriter, r *http.Request){
 	jsonValue,_ := json.Marshal(values)
 
 
-	req, err := http.NewRequest("POST","http://ipm.hermo.me/api/rest/user", bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequest("POST",url+"/user", bytes.NewBuffer(jsonValue))
 	req.Header.Set("x-hasura-admin-secret","myadminsecretkey")
 
 	client := &http.Client{}
@@ -152,6 +152,6 @@ func main() {
 	router.HandleFunc("/access/{id}",getAccess).Methods("GET")
 	router.HandleFunc("/login/user={login}&password={pass}",login)
 	router.HandleFunc("/register",register).Methods("POST")
-	log.Fatal(http.ListenAndServe(":3000",router))
+	log.Fatal(http.ListenAndServe(":3003",router))
 
 }
