@@ -79,10 +79,21 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 }
 
 func login(rw http.ResponseWriter, r *http.Request){
-	vars := mux.Vars(r)
-	login := vars["login"]
+
+
+	var u map[string]interface{}
+	err := json.NewDecoder(bodyString).Decode(&u)
+	log.Println(u)
+	log.Println(r.Body)
+
+
+	if err != nil {
+		http.Error(rw, err.Error(), 500)
+		return
+	}
+	login := u["username"].(string)
 	log.Println(login)
-	pwd := vars["pass"]
+	pwd := u["password"].(string)
 	log.Println(pwd)
 
 
@@ -150,7 +161,7 @@ func main() {
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/",indexRoute)
 	router.HandleFunc("/access/{id}",getAccess).Methods("GET")
-	router.HandleFunc("/login/user={login}&password={pass}",login)
+	router.HandleFunc("/login",login).Methods("POST")
 	router.HandleFunc("/register",register).Methods("POST")
 	log.Fatal(http.ListenAndServe(":3003",router))
 
