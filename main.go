@@ -10,12 +10,16 @@ import (
 	"time"
 )
 
-const url = "http://localhost:8080/api/rest"
+const url = "http://ipm.hermo.me/api/rest"
 
 type access struct {
 	Facility    string `json:"facility"`
 	Timestamp   string `json:"timestamp"`
-	 Temperature string `json:"temperature"`
+	Temperature string `json:"temperature"`
+}
+type user struct {
+	username string
+	password  string
 }
 
 func getAccess (rw http.ResponseWriter,r *http.Request) {
@@ -50,22 +54,22 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	json.NewDecoder(response.Body).Decode(&result)
 
 	accessarr := result["access_log"].([]interface{})
-    var fs []access
+	var fs []access
 
 	for _,v := range accessarr {
 		//fmt.Println("key", k ,"=>" , "value" , v)
 		tmp := v.(map[string]interface {})
 		for k,v := range tmp {
 			if k == ("type") && (v == "IN") {
-					var tmpacc access
-					tmpacc.Timestamp = tmp["timestamp"].(string)
-					tmpacc.Temperature = tmp["temperature"].(string)
-					var facility = tmp["facility"].(map[string]interface {})
-					tmpacc.Facility = facility["name"].(string)
-					fs = append(fs, tmpacc)
-				}
+				var tmpacc access
+				tmpacc.Timestamp = tmp["timestamp"].(string)
+				tmpacc.Temperature = tmp["temperature"].(string)
+				var facility = tmp["facility"].(map[string]interface {})
+				tmpacc.Facility = facility["name"].(string)
+				fs = append(fs, tmpacc)
 			}
 		}
+	}
 
 	b,_ := json.Marshal(fs)
 	//fmt.Println(string(b))
@@ -80,20 +84,21 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 
 func login(rw http.ResponseWriter, r *http.Request){
 
+	var u map[string]string
 
-	var u map[string]interface{}
-	err := json.NewDecoder(bodyString).Decode(&u)
+	err := json.NewDecoder(r.Body).Decode(&u)
+
 	log.Println(u)
-	log.Println(r.Body)
+
 
 
 	if err != nil {
 		http.Error(rw, err.Error(), 500)
 		return
 	}
-	login := u["username"].(string)
+	login := u["username"]
 	log.Println(login)
-	pwd := u["password"].(string)
+	pwd := u["password"]
 	log.Println(pwd)
 
 
@@ -120,15 +125,17 @@ func login(rw http.ResponseWriter, r *http.Request){
 
 func register(rw http.ResponseWriter, r *http.Request){
 
-	var u map[string]interface{}
+	var u map[string]string
+
 	err := json.NewDecoder(r.Body).Decode(&u)
 
 	if err != nil {
 		http.Error(rw, err.Error(), 500)
 		return
 	}
+	log.Println(u)
 
-	values  := map[string]string{"username": u["username"].(string), "password": u["password"].(string), "name": u["name"].(string), "surname": u["surname"].(string), "phone": u["phone"].(string), "email": u["email"].(string), "is_vaccinated": u["is_vaccinated"].(string)}
+	values  := map[string]string{"username": u["username"], "password": u["password"], "name": u["name"], "surname": u["surname"], "phone": u["phone"], "email": u["email"], "is_vaccinated": u["is_vaccinated"]}
 	jsonValue,_ := json.Marshal(values)
 
 
