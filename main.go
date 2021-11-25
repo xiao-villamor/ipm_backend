@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
-	"net/http"
+	"github.com/skip2/go-qrcode"
 	"log"
+	"net/http"
 	"sort"
 	"time"
-    "github.com/skip2/go-qrcode"
 )
 
 const url = "http://ipm.hermo.me/api/rest"
@@ -24,10 +24,29 @@ type user struct {
 	password  string
 }
 
+func test_connection() bool {
+	_, err := http.Get(url)
+	if err != nil {
+		return false
+	} else {
+		return true
+	}
+}
+
 func getAccess (rw http.ResponseWriter,r *http.Request) {
 
-	vars := mux.Vars(r)
-	uuid := vars["id"]
+	if !test_connection() {
+		http.Error(rw, "server unreachable", 500)
+		return
+	}
+
+	uuids, ok := r.URL.Query()["uuid"]
+	if !ok || len(uuids[0]) < 1 {
+		log.Println("Url Param 'uuid' is missing")
+		return
+	}
+	uuid := uuids[0]
+
 	format := "2006-01-02T15:04:05+03:00"
 	dt := time.Now()
 	dtstring := dt.Format(format)
@@ -45,7 +64,9 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	client := &http.Client{}
 	response, err :=client.Do(req)
 
+
 	if err != nil {
+		http.Error(rw, err.Error(), response.StatusCode)
 		log.Fatal(err)
 		return
 	}
@@ -79,7 +100,7 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 		return fs[i].Timestamp.After(fs[j].Timestamp)
 	})
 	var max = 10
-	if(len(fs) < 10){
+	if len(fs) < 10 {
 		max = len(fs)
 	}
 	b,_ := json.Marshal(fs)
@@ -89,28 +110,35 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 
 	//fmt.Println("key", string(b))
 	//log.Print(string(b))
+
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	rw.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(rw,string(b))
 }
 
 func login(rw http.ResponseWriter, r *http.Request){
 
+	if !test_connection() {
+		http.Error(rw, "server unreachable", 500)
+		return
+	}
+
 	var u map[string]string
 
 	err := json.NewDecoder(r.Body).Decode(&u)
 
-	log.Println(u)
-
-
-
 	if err != nil {
-		http.Error(rw, err.Error(), 500)
+		http.Error(rw, "invalid params", 400)
 		return
 	}
 	login := u["username"]
-	log.Println(login)
 	pwd := u["password"]
-	log.Println(pwd)
+
+	if login == "" || pwd == "" {
+		http.Error(rw,"login and password are required",400)
+		return
+	}
 
 
 	req, err := http.NewRequest("POST",url + "/login?username=" + login + "&password="+ pwd, nil)
@@ -120,6 +148,7 @@ func login(rw http.ResponseWriter, r *http.Request){
 	response, err :=client.Do(req)
 
 	if err != nil {
+		http.Error(rw, err.Error(), response.StatusCode)
 		log.Fatal(err)
 		return
 	}
@@ -130,18 +159,28 @@ func login(rw http.ResponseWriter, r *http.Request){
 	json.NewDecoder(response.Body).Decode(&result)
 
 	b,_ := json.Marshal(result)
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	rw.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(rw,string(b))
 }
 
 func register(rw http.ResponseWriter, r *http.Request){
 
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if(!test_connection()){
+		http.Error(rw, "server unreachable", 500)
+		return
+	}
+
 	var u map[string]string
 
-	err := json.NewDecoder(r.Body).Decode(&u)
 
+	err := json.NewDecoder(r.Body).Decode(&u)
 	if err != nil {
-		http.Error(rw, err.Error(), 500)
+		http.Error(rw, "Bad params",500)
 		return
 	}
 
@@ -150,59 +189,86 @@ func register(rw http.ResponseWriter, r *http.Request){
 
 
 	req, err := http.NewRequest("POST",url+"/user", bytes.NewBuffer(jsonValue))
+
 	req.Header.Set("x-hasura-admin-secret","myadminsecretkey")
 
 	client := &http.Client{}
 	response, err :=client.Do(req)
+	log.Println(response.StatusCode)
 
-	if err != nil {
-		log.Fatal(err)
+	if response.StatusCode == 400 {
+		log.Println("error 400")
+		http.Error(rw, "User already exist", response.StatusCode)
 		return
 	}
 
+	if err != nil {
+		http.Error(rw, err.Error(), response.StatusCode)
+		return
+	}
 	var result map[string]interface{}
 	//var tesresult access
 
 	json.NewDecoder(response.Body).Decode(&result)
-
+	log.Println(result)
 	//d,_ := json.Marshal(result)
 	//fmt.Fprintf(rw, string(d))
 }
 func generateqr(rw http.ResponseWriter, r *http.Request){
 
-	var u map[string]string
 
-	err := json.NewDecoder(r.Body).Decode(&u)
-
-	if err != nil {
-		http.Error(rw, err.Error(), 500)
+	names, ok := r.URL.Query()["name"]
+	if !ok || len(names[0]) < 1 {
+		log.Println("Url Param 'key' is missing")
 		return
 	}
 
+	surnames, ok := r.URL.Query()["surname"]
+	if !ok || len(surnames[0]) < 1 {
+		log.Println("Url Param 'key' is missing")
+		return
+	}
+
+	uuids, ok := r.URL.Query()["uuid"]
+	if !ok ||  len(uuids[0]) < 1 {
+		log.Println("Url Param 'key' is missing")
+		return
+	}
+
+	name := names[0]
+	surname := surnames[0]
+	uuid := uuids[0]
+	encodeString := name+ "," + surname + "," + uuid
+
 	var png []byte
-	png, err = qrcode.Encode(u["name"]+","+u["surname"]+","+u["uuid"], qrcode.Medium, 256)
+
+	png, err := qrcode.Encode(encodeString, qrcode.Medium, 256)
+
 	if err != nil {
 		http.Error(rw, err.Error(), 500)
 		log.Fatal(err)
 		return
 	}
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
 	rw.Header().Set("Content-Type", "image/png")
 	rw.Write(png)
 
 }
 
 func indexRoute(rw http.ResponseWriter, r *http.Request){
-	fmt.Fprintf(rw,"welcome to contacts API")
+	fmt.Fprintf(rw,"<h1> Welcome to IPM-API</h1><h3> methods</h3><p> /access?uuid=XXX return the last 10 access of thad uuid (GET)</p><p> /login login a username body is equals to hasura (POST)</p><p> /register register a new username body is equals to hasura (POST)</p><p> /qr?name=xx&surname=xx&uuid=xxx return an image with the name surname and uuid info</p>")
 
 }
 
 func main() {
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/",indexRoute)
-	router.HandleFunc("/access/{id}",getAccess).Methods("GET")
-	router.HandleFunc("/login",login).Methods("POST")
-	router.HandleFunc("/register",register).Methods("POST")
-	router.HandleFunc("/qr",generateqr).Methods("POST")
+	router.HandleFunc("/access",getAccess).Methods("GET","OPTIONS")
+	router.HandleFunc("/login",login).Methods("POST","OPTIONS")
+	router.HandleFunc("/register",register).Methods("POST","OPTIONS")
+	router.HandleFunc("/qr",generateqr).Methods("GET","OPTIONS")
 	log.Fatal(http.ListenAndServe(":3003",router))
 
 }
