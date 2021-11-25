@@ -7,14 +7,16 @@ import (
 	"github.com/gorilla/mux"
 	"net/http"
 	"log"
+	"sort"
 	"time"
+    "github.com/skip2/go-qrcode"
 )
 
 const url = "http://ipm.hermo.me/api/rest"
 
 type access struct {
 	Facility    string `json:"facility"`
-	Timestamp   string `json:"timestamp"`
+	Timestamp   time.Time `json:"timestamp"`
 	Temperature string `json:"temperature"`
 }
 type user struct {
@@ -37,7 +39,7 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	jsonValue,_ := json.Marshal(values)
 	//fmt.Fprintf(rw,string(jsonValue))
 
-	req, err := http.NewRequest("GET",url + "/user_access_log/" + uuid + "/daterange?limit=20", bytes.NewBuffer(jsonValue))
+	req, err := http.NewRequest("GET",url + "/user_access_log/" + uuid + "/daterange", bytes.NewBuffer(jsonValue))
 	req.Header.Set("x-hasura-admin-secret","myadminsecretkey")
 
 	client := &http.Client{}
@@ -62,18 +64,27 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 		for k,v := range tmp {
 			if k == ("type") && (v == "IN") {
 				var tmpacc access
-				tmpacc.Timestamp = tmp["timestamp"].(string)
 				tmpacc.Temperature = tmp["temperature"].(string)
+				tmpacc.Timestamp, err = time.Parse(format,tmp["timestamp"].(string))
+				if err != nil {
+					fmt.Println(err)
+				}
 				var facility = tmp["facility"].(map[string]interface {})
 				tmpacc.Facility = facility["name"].(string)
 				fs = append(fs, tmpacc)
 			}
 		}
 	}
-
+	sort.Slice(fs, func(i, j int) bool {
+		return fs[i].Timestamp.After(fs[j].Timestamp)
+	})
+	var max = 10
+	if(len(fs) < 10){
+		max = len(fs)
+	}
 	b,_ := json.Marshal(fs)
 	//fmt.Println(string(b))
-	b, _ = json.MarshalIndent(fs, "", "  ")
+	b, _ = json.MarshalIndent(fs[0:max], "", "  ")
 	//log.Println(string(b))
 
 	//fmt.Println("key", string(b))
@@ -133,7 +144,6 @@ func register(rw http.ResponseWriter, r *http.Request){
 		http.Error(rw, err.Error(), 500)
 		return
 	}
-	log.Println(u)
 
 	values  := map[string]string{"username": u["username"], "password": u["password"], "name": u["name"], "surname": u["surname"], "phone": u["phone"], "email": u["email"], "is_vaccinated": u["is_vaccinated"]}
 	jsonValue,_ := json.Marshal(values)
@@ -158,6 +168,28 @@ func register(rw http.ResponseWriter, r *http.Request){
 	//d,_ := json.Marshal(result)
 	//fmt.Fprintf(rw, string(d))
 }
+func generateqr(rw http.ResponseWriter, r *http.Request){
+
+	var u map[string]string
+
+	err := json.NewDecoder(r.Body).Decode(&u)
+
+	if err != nil {
+		http.Error(rw, err.Error(), 500)
+		return
+	}
+
+	var png []byte
+	png, err = qrcode.Encode(u["name"]+","+u["surname"]+","+u["uuid"], qrcode.Medium, 256)
+	if err != nil {
+		http.Error(rw, err.Error(), 500)
+		log.Fatal(err)
+		return
+	}
+	rw.Header().Set("Content-Type", "image/png")
+	rw.Write(png)
+
+}
 
 func indexRoute(rw http.ResponseWriter, r *http.Request){
 	fmt.Fprintf(rw,"welcome to contacts API")
@@ -170,6 +202,7 @@ func main() {
 	router.HandleFunc("/access/{id}",getAccess).Methods("GET")
 	router.HandleFunc("/login",login).Methods("POST")
 	router.HandleFunc("/register",register).Methods("POST")
+	router.HandleFunc("/qr",generateqr).Methods("POST")
 	log.Fatal(http.ListenAndServe(":3003",router))
 
 }
