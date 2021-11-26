@@ -34,7 +34,9 @@ func test_connection() bool {
 }
 
 func getAccess (rw http.ResponseWriter,r *http.Request) {
-
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	rw.Header().Set("Content-Type", "application/json")
 	if !test_connection() {
 		http.Error(rw, "server unreachable", 500)
 		return
@@ -111,13 +113,15 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	//fmt.Println("key", string(b))
 	//log.Print(string(b))
 
-	rw.Header().Set("Access-Control-Allow-Origin", "*")
-	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	rw.Header().Set("Content-Type", "application/json")
+
 	fmt.Fprintf(rw,string(b))
 }
 
 func login(rw http.ResponseWriter, r *http.Request){
+
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	rw.Header().Set("Content-Type", "application/json")
 
 	if !test_connection() {
 		http.Error(rw, "server unreachable", 500)
@@ -159,9 +163,7 @@ func login(rw http.ResponseWriter, r *http.Request){
 	json.NewDecoder(response.Body).Decode(&result)
 
 	b,_ := json.Marshal(result)
-	rw.Header().Set("Access-Control-Allow-Origin", "*")
-	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	rw.Header().Set("Content-Type", "application/json")
+
 	fmt.Fprintf(rw,string(b))
 }
 
@@ -215,7 +217,10 @@ func register(rw http.ResponseWriter, r *http.Request){
 	//fmt.Fprintf(rw, string(d))
 }
 func generateqr(rw http.ResponseWriter, r *http.Request){
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
+	rw.Header().Set("Content-Type", "image/png")
 
 	names, ok := r.URL.Query()["name"]
 	if !ok || len(names[0]) < 1 {
@@ -249,10 +254,7 @@ func generateqr(rw http.ResponseWriter, r *http.Request){
 		log.Fatal(err)
 		return
 	}
-	rw.Header().Set("Access-Control-Allow-Origin", "*")
-	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	rw.Header().Set("Content-Type", "image/png")
 	rw.Write(png)
 
 }
