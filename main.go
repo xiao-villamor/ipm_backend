@@ -10,9 +10,13 @@ import (
 	"net/http"
 	"sort"
 	"time"
+	"github.com/ReneKroon/ttlcache/v2"
 )
 
 const url = "http://ipm.hermo.me/api/rest"
+
+var cache ttlcache.SimpleCache = ttlcache.NewCache()
+
 
 type access struct {
 	Facility    string `json:"facility"`
@@ -33,10 +37,24 @@ func test_connection() bool {
 	}
 }
 
+func verifyCache(url string) interface{}{
+	val,err := cache.Get(url)
+	if err != ttlcache.ErrNotFound {
+		return val
+	}
+	return nil
+}
+
 func getAccess (rw http.ResponseWriter,r *http.Request) {
-	rw.Header().Set("Access-Control-Allow-Origin", "*")
-	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	rw.Header().Set("Content-Type", "application/json")
+	var cash = verifyCache(r.URL.String())
+	if cash != nil {
+		log.Println("is cached")
+		rw.Header().Set("Access-Control-Allow-Origin", "*")
+		rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		rw.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(rw,cash.(string))
+	}
+
 	if !test_connection() {
 		http.Error(rw, "server unreachable", 500)
 		return
@@ -113,15 +131,14 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	//fmt.Println("key", string(b))
 	//log.Print(string(b))
 
-
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	rw.Header().Set("Content-Type", "application/json")
+	cache.Set(r.URL.String(),string(b))
 	fmt.Fprintf(rw,string(b))
 }
 
 func login(rw http.ResponseWriter, r *http.Request){
-
-	rw.Header().Set("Access-Control-Allow-Origin", "*")
-	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	rw.Header().Set("Content-Type", "application/json")
 
 	if !test_connection() {
 		http.Error(rw, "server unreachable", 500)
@@ -163,7 +180,9 @@ func login(rw http.ResponseWriter, r *http.Request){
 	json.NewDecoder(response.Body).Decode(&result)
 
 	b,_ := json.Marshal(result)
-
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	rw.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(rw,string(b))
 }
 
@@ -217,10 +236,14 @@ func register(rw http.ResponseWriter, r *http.Request){
 	//fmt.Fprintf(rw, string(d))
 }
 func generateqr(rw http.ResponseWriter, r *http.Request){
-	rw.Header().Set("Access-Control-Allow-Origin", "*")
-	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	var cash = verifyCache(r.URL.String())
+	if cash != nil {
+		rw.Header().Set("Access-Control-Allow-Origin", "*")
+		rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	rw.Header().Set("Content-Type", "image/png")
+		rw.Header().Set("Content-Type", "image/png")
+		rw.Write(cash.([]byte))
+	}
 
 	names, ok := r.URL.Query()["name"]
 	if !ok || len(names[0]) < 1 {
@@ -254,7 +277,11 @@ func generateqr(rw http.ResponseWriter, r *http.Request){
 		log.Fatal(err)
 		return
 	}
+	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
+	rw.Header().Set("Content-Type", "image/png")
+	cache.Set(r.URL.String(),png)
 	rw.Write(png)
 
 }
@@ -265,6 +292,8 @@ func indexRoute(rw http.ResponseWriter, r *http.Request){
 }
 
 func main() {
+
+	cache.SetTTL(5 * time.Minute)
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/",indexRoute)
 	router.HandleFunc("/access",getAccess).Methods("GET","OPTIONS")
