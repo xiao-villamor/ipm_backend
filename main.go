@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/gorilla/mux"
 	"github.com/skip2/go-qrcode"
 	"log"
 	"net/http"
 	"sort"
 	"time"
-	"github.com/ReneKroon/ttlcache/v2"
 )
 
 const url = "http://ipm.hermo.me/api/rest"
+
+var isup = true
 
 var cache ttlcache.SimpleCache = ttlcache.NewCache()
 
@@ -23,18 +25,15 @@ type access struct {
 	Timestamp   time.Time `json:"timestamp"`
 	Temperature string `json:"temperature"`
 }
-type user struct {
-	username string
-	password  string
-}
 
-func test_connection() bool {
-	_, err := http.Get(url)
+func test_connection()  {
+	_, err := http.Head(url)
 	if err != nil {
-		return false
+		isup = false
 	} else {
-		return true
+		isup = true
 	}
+	time.Sleep(15 * time.Second)
 }
 
 func verifyCache(url string) interface{}{
@@ -45,20 +44,38 @@ func verifyCache(url string) interface{}{
 	return nil
 }
 
+func auxLoopFunc(fs *[]access, k string,v interface{}, tmp map[string]interface {}) {
+	format := "2006-01-02T15:04:05+03:00"
+			if k == ("type") && (v == "IN") {
+				var tmpacc access
+				tmpacc.Temperature = tmp["temperature"].(string)
+				tmpacc.Timestamp, _ = time.Parse(format, tmp["timestamp"].(string))
+				var facility = tmp["facility"].(map[string]interface{})
+				tmpacc.Facility = facility["name"].(string)
+				*fs = append(*fs, tmpacc)
+			}
+}
+
 func getAccess (rw http.ResponseWriter,r *http.Request) {
+    //log.Println(isup)
+	//LOW TIME NO OPT NEEDED
 	var cash = verifyCache(r.URL.String())
 	if cash != nil {
-		log.Println("is cached")
+		var cashval = cash.(string)
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
 		rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		rw.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(rw,cash.(string))
+		fmt.Fprintf(rw,cashval)
+		return
 	}
 
-	if !test_connection() {
+	//start := time.Now()
+	if !isup {
 		http.Error(rw, "server unreachable", 500)
 		return
 	}
+	//end := time.Now()
+	//log.Println(end.Sub(start))
 
 	uuids, ok := r.URL.Query()["uuid"]
 	if !ok || len(uuids[0]) < 1 {
@@ -77,6 +94,7 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	values  := map[string]string{"startdate": dtm1string, "enddate": dtstring}
 	jsonValue,_ := json.Marshal(values)
 	//fmt.Fprintf(rw,string(jsonValue))
+
 
 	req, err := http.NewRequest("GET",url + "/user_access_log/" + uuid + "/daterange", bytes.NewBuffer(jsonValue))
 	req.Header.Set("x-hasura-admin-secret","myadminsecretkey")
@@ -98,24 +116,36 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 
 	accessarr := result["access_log"].([]interface{})
 	var fs []access
+	//var fspoitner = &fs
 
 	for _,v := range accessarr {
 		//fmt.Println("key", k ,"=>" , "value" , v)
 		tmp := v.(map[string]interface {})
 		for k,v := range tmp {
+			/*
+			go func() {
+				if k == ("type") && (v == "IN") {
+					var tmpacc access
+					tmpacc.Temperature = tmp["temperature"].(string)
+					tmpacc.Timestamp, _ = time.Parse(format, tmp["timestamp"].(string))
+					var facility = tmp["facility"].(map[string]interface{})
+					tmpacc.Facility = facility["name"].(string)
+					fs = append(fs, tmpacc)
+				}
+			}()
+			*/
 			if k == ("type") && (v == "IN") {
 				var tmpacc access
 				tmpacc.Temperature = tmp["temperature"].(string)
-				tmpacc.Timestamp, err = time.Parse(format,tmp["timestamp"].(string))
-				if err != nil {
-					fmt.Println(err)
-				}
-				var facility = tmp["facility"].(map[string]interface {})
+				tmpacc.Timestamp, _ = time.Parse(format, tmp["timestamp"].(string))
+				var facility = tmp["facility"].(map[string]interface{})
 				tmpacc.Facility = facility["name"].(string)
 				fs = append(fs, tmpacc)
 			}
 		}
+
 	}
+
 	sort.Slice(fs, func(i, j int) bool {
 		return fs[i].Timestamp.After(fs[j].Timestamp)
 	})
@@ -123,13 +153,9 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	if len(fs) < 10 {
 		max = len(fs)
 	}
-	b,_ := json.Marshal(fs)
-	//fmt.Println(string(b))
-	b, _ = json.MarshalIndent(fs[0:max], "", "  ")
-	//log.Println(string(b))
 
-	//fmt.Println("key", string(b))
-	//log.Print(string(b))
+	b,_ := json.Marshal(fs)
+	b, _ = json.MarshalIndent(fs[0:max], "", "  ")
 
 	rw.Header().Set("Access-Control-Allow-Origin", "*")
 	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -138,9 +164,10 @@ func getAccess (rw http.ResponseWriter,r *http.Request) {
 	fmt.Fprintf(rw,string(b))
 }
 
+
 func login(rw http.ResponseWriter, r *http.Request){
 
-	if !test_connection() {
+	if isup {
 		http.Error(rw, "server unreachable", 500)
 		return
 	}
@@ -191,7 +218,7 @@ func register(rw http.ResponseWriter, r *http.Request){
 	rw.Header().Set("Access-Control-Allow-Origin", "*")
 	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	if(!test_connection()){
+	if isup {
 		http.Error(rw, "server unreachable", 500)
 		return
 	}
@@ -208,14 +235,13 @@ func register(rw http.ResponseWriter, r *http.Request){
 	values  := map[string]string{"username": u["username"], "password": u["password"], "name": u["name"], "surname": u["surname"], "phone": u["phone"], "email": u["email"], "is_vaccinated": u["is_vaccinated"]}
 	jsonValue,_ := json.Marshal(values)
 
-
 	req, err := http.NewRequest("POST",url+"/user", bytes.NewBuffer(jsonValue))
 
 	req.Header.Set("x-hasura-admin-secret","myadminsecretkey")
 
 	client := &http.Client{}
 	response, err :=client.Do(req)
-	log.Println(response.StatusCode)
+	//log.Println(response.StatusCode)
 
 	if response.StatusCode == 400 {
 		log.Println("error 400")
@@ -231,7 +257,6 @@ func register(rw http.ResponseWriter, r *http.Request){
 	//var tesresult access
 
 	json.NewDecoder(response.Body).Decode(&result)
-	log.Println(result)
 	//d,_ := json.Marshal(result)
 	//fmt.Fprintf(rw, string(d))
 }
@@ -240,9 +265,9 @@ func generateqr(rw http.ResponseWriter, r *http.Request){
 	if cash != nil {
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
 		rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
 		rw.Header().Set("Content-Type", "image/png")
 		rw.Write(cash.([]byte))
+		return
 	}
 
 	names, ok := r.URL.Query()["name"]
@@ -293,7 +318,18 @@ func indexRoute(rw http.ResponseWriter, r *http.Request){
 
 func main() {
 
-	cache.SetTTL(5 * time.Minute)
+	err := cache.SetTTL(15 * time.Second)
+	if err != nil {
+		return
+	}
+	go func() {
+		for{
+			test_connection()
+		}
+
+
+	}()
+
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/",indexRoute)
 	router.HandleFunc("/access",getAccess).Methods("GET","OPTIONS")
