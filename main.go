@@ -88,7 +88,7 @@ func getAccess(rw http.ResponseWriter, r *http.Request) {
 	format := "2006-01-02T15:04:05+03:00"
 	dt := time.Now()
 	dtstring := dt.Format(format)
-	dt1m := dt.AddDate(-1, 0, 0)
+	dt1m := dt.AddDate(-1, 0, 0).Add(1*time.Hour)
 	dtm1string := dt1m.Format(format)
 
 	values := map[string]string{"startdate": dtm1string, "enddate": dtstring}
