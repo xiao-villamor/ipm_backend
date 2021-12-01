@@ -16,7 +16,7 @@ import (
 
 const url = "http://ipm.hermo.me/api/rest"
 
-var isup = true
+var isup = false
 
 var cache ttlcache.SimpleCache = ttlcache.NewCache()
 
@@ -30,9 +30,9 @@ func test_connection() {
 	_, err := http.Head(url)
 	log.Println(err)
 	if err != nil {
-		isup = true
-	} else {
 		isup = false
+	} else {
+		isup = true
 	}
 	time.Sleep(15 * time.Second)
 }
@@ -164,7 +164,7 @@ func getAccess(rw http.ResponseWriter, r *http.Request) {
 
 func login(rw http.ResponseWriter, r *http.Request) {
 
-	if isup {
+	if !isup {
 		http.Error(rw, "server unreachable", 500)
 		return
 	}
@@ -214,7 +214,7 @@ func register(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Access-Control-Allow-Origin", "*")
 	rw.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	if isup {
+	if !isup {
 		http.Error(rw, "server unreachable", 500)
 		return
 	}
