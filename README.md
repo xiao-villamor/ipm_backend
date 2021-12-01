@@ -13,7 +13,7 @@ return the last 10 access in the last year
 
 **Parameters**
 
-- uuid : uuid who identifies the user from whom we want to obtain the accesses
+- uuid
 
 ***Example***
 
@@ -28,8 +28,8 @@ parameters go in the body
 
 **Parameters**
 
-- username : username of the user
-- password : pass of the user
+- username
+- password 
 
 ***Example***
 
