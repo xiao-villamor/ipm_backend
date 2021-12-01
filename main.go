@@ -28,7 +28,6 @@ type access struct {
 
 func test_connection() {
 	_, err := http.Head(url)
-	log.Println(err)
 	if err != nil {
 		isup = false
 	} else {
@@ -46,7 +45,7 @@ func verifyCache(url string) interface{} {
 }
 
 func auxLoopFunc(fs *[]access, k string, v interface{}, tmp map[string]interface{}) {
-	format := "2006-01-02T15:04:05+03:00"
+	format := "2006-01-02T15:04:05+04:00"
 	if k == ("type") && (v == "IN") {
 		var tmpacc access
 		tmpacc.Temperature = tmp["temperature"].(string)
@@ -85,11 +84,12 @@ func getAccess(rw http.ResponseWriter, r *http.Request) {
 	}
 	uuid := uuids[0]
 
-	format := "2006-01-02T15:04:05+03:00"
-	dt := time.Now()
+	format := "2006-01-02T15:04:05+00:00"
+	dt := time.Now().Add(1*time.Hour)
 	dtstring := dt.Format(format)
 	dt1m := dt.AddDate(-1, 0, 0).Add(1*time.Hour)
 	dtm1string := dt1m.Format(format)
+	//log.Println("startdate : " + dtm1string + " endate :" +dtstring)
 
 	values := map[string]string{"startdate": dtm1string, "enddate": dtstring}
 	jsonValue, _ := json.Marshal(values)
@@ -111,6 +111,8 @@ func getAccess(rw http.ResponseWriter, r *http.Request) {
 	//var tesresult access
 
 	json.NewDecoder(response.Body).Decode(&result)
+	//log.Println(result)
+
 
 	accessarr := result["access_log"].([]interface{})
 	var fs []access
@@ -135,7 +137,10 @@ func getAccess(rw http.ResponseWriter, r *http.Request) {
 			if k == ("type") && (v == "IN") {
 				var tmpacc access
 				tmpacc.Temperature = tmp["temperature"].(string)
+				//log.Println("json " + tmp["timestamp"].(string))
 				tmpacc.Timestamp, _ = time.Parse(format, tmp["timestamp"].(string))
+				//log.Println("parse " + tmpacc.Timestamp.String())
+
 				var facility = tmp["facility"].(map[string]interface{})
 				tmpacc.Facility = facility["name"].(string)
 				fs = append(fs, tmpacc)
