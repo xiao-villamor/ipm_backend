@@ -2,6 +2,7 @@
 
 This repo is wrapper to the Hasura API given in IPM.
 The api add functionalities required to do the assingment 3.
+The url of the base api is down raplace it with your url
 
 ---
 
